@@ -1,0 +1,25 @@
+{
+  "name": "uniswapv2_rebuild",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EduardPershyn/uniswapV2_rebuild.git"
+  },
+  "author": "Eduard Pershyn",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/EduardPershyn/uniswapV2_rebuild/issues"
+  },
+  "homepage": "https://github.com/EduardPershyn/uniswapV2_rebuild#readme",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "hardhat": "^2.17.0",
+    "ethereum-waffle": "^2.4.1",
+    "ethers": "4.0.46"
+  }
+}
