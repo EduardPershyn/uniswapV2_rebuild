@@ -4,14 +4,13 @@ pragma solidity ^0.8.19;
 import './interfaces/IUniswapV2Pair.sol';
 import './UniswapV2ERC20.sol';
 import './libraries/Math.sol';
-import './libraries/UQ112x112.sol';
 import './interfaces/IERC20.sol';
 import './interfaces/IUniswapV2Factory.sol';
 import './interfaces/IUniswapV2Callee.sol';
 
-contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
-    using UQ112x112 for uint224;
+import "solady/src/utils/FixedPointMathLib.sol";
 
+contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     uint public constant MINIMUM_LIQUIDITY = 10**3;
     bytes4 private constant SELECTOR = bytes4(keccak256(bytes('transfer(address,uint256)')));
 
@@ -64,8 +63,8 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
             // * never overflows, and + overflow is desired
-            price0CumulativeLast += uint(UQ112x112.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
-            price1CumulativeLast += uint(UQ112x112.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
+            price0CumulativeLast += FixedPointMathLib.divWad(_reserve1, _reserve0) * timeElapsed;
+            price1CumulativeLast += FixedPointMathLib.divWad(_reserve0, _reserve1) * timeElapsed;
         }
         reserve0 = uint112(balance0);
         reserve1 = uint112(balance1);
