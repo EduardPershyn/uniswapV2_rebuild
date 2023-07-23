@@ -11,7 +11,9 @@ import './interfaces/IUniswapV2Callee.sol';
 import "solady/src/utils/FixedPointMathLib.sol";
 import "solady/src/utils/SafeTransferLib.sol";
 
-contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
+import { IERC3156FlashBorrower, IERC3156FlashLender } from "@openzeppelin/contracts/interfaces/IERC3156.sol";
+
+contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20, IERC3156FlashLender {
     uint public constant MINIMUM_LIQUIDITY = 10**3;
     bytes4 private constant SELECTOR = bytes4(keccak256(bytes('transfer(address,uint256)')));
 
@@ -180,5 +182,89 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     // force reserves to match balances
     function sync() external lock {
         _update(IERC20(token0).balanceOf(address(this)), IERC20(token1).balanceOf(address(this)), reserve0, reserve1);
+    }
+
+    bytes32 public constant CALLBACK_SUCCESS = keccak256("ERC3156FlashBorrower.onFlashLoan");
+
+    /**
+     * @dev Loan `amount` tokens to `receiver`, and takes it back plus a `flashFee` after the callback.
+     * @param receiver The contract receiving the tokens, needs to implement the `onFlashLoan(address user, uint256 amount, uint256 fee, bytes calldata)` interface.
+     * @param token The loan currency.
+     * @param amount The amount of tokens lent.
+     * @param data A data parameter to be passed on to the `receiver` for any custom use.
+     */
+    function flashLoan(
+        IERC3156FlashBorrower receiver,
+        address token,
+        uint256 amount,
+        bytes calldata data
+    ) external override lock returns(bool) {
+
+        (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
+
+        if (token == token0) {
+            require(amount < _reserve0, 'UniswapV2: INSUFFICIENT_LIQUIDITY');
+        } else if (token == token1) {
+            require(amount < _reserve1, 'UniswapV2: INSUFFICIENT_LIQUIDITY');
+        } else {
+            revert('UniswapV2: invalid token');
+        }
+
+        SafeTransferLib.safeTransfer(token, address(receiver), amount);
+
+        uint256 _fee = _flashFee(token, amount);
+        require(
+            receiver.onFlashLoan(msg.sender, token, amount, _fee, data) == CALLBACK_SUCCESS,
+            "UniswapV2: Callback failed"
+        );
+
+        SafeTransferLib.safeTransferFrom(token, address(receiver), address(this), amount + _fee);
+        _update(IERC20(token0).balanceOf(address(this)), IERC20(token1).balanceOf(address(this)), _reserve0, _reserve1);
+        return true;
+    }
+
+    /**
+     * @dev The fee to be charged for a given loan.
+     * @param token The loan currency.
+     * @param amount The amount of tokens lent.
+     * @return The amount of `token` to be charged for the loan, on top of the returned principal.
+     */
+    function flashFee(
+        address token,
+        uint256 amount
+    ) external pure override returns (uint256) {
+        return _flashFee(token, amount);
+    }
+
+    /**
+     * @dev The fee to be charged for a given loan. Internal function with no checks.
+     * @param token The loan currency.
+     * @param amount The amount of tokens lent.
+     * @return The amount of `token` to be charged for the loan, on top of the returned principal.
+     */
+    function _flashFee(
+        address token,
+        uint256 amount
+    ) internal pure returns (uint256) {
+        return (amount * 1000 / 997 + 1) - amount;
+    }
+
+    /**
+     * @dev The amount of currency available to be lent.
+     * @param token The loan currency.
+     * @return The amount of `token` that can be borrowed.
+     */
+    function maxFlashLoan(
+        address token
+    ) external view override returns (uint256) {
+        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
+
+        if (token == token0) {
+            return _reserve0;
+        } else if (token == token1) {
+            return _reserve1;
+        } else {
+            return 0;
+        }
     }
 }
